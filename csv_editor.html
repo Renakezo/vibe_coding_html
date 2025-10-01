@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="ru">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Редактор CSV файлов</title>
+		<style>
+			* {
+				box-sizing: border-box;
+				font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			}
+
+			body {
+				margin: 0;
+				padding: 20px;
+				background-color: #f0f2f5;
+				color: #333;
+			}
+
+			.container {
+				max-width: 1200px;
+				margin: 0 auto;
+				background-color: white;
+				padding: 25px;
+				border-radius: 12px;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+			}
+
+			h1 {
+				text-align: center;
+				color: #2c3e50;
+				margin-bottom: 30px;
+				font-weight: 600;
+			}
+
+			.controls {
+				display: flex;
+				justify-content: space-between;
+				margin-bottom: 20px;
+				flex-wrap: wrap;
+				gap: 10px;
+			}
+
+			button {
+				padding: 10px 18px;
+				background-color: #3498db;
+				color: white;
+				border: none;
+				border-radius: 8px;
+				cursor: pointer;
+				transition: all 0.3s ease;
+				font-weight: 500;
+				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+			}
+
+			button:hover {
+				background-color: #2980b9;
+				transform: translateY(-2px);
+				box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+			}
+
+			button.delete {
+				background-color: #e74c3c;
+			}
+
+			button.delete:hover {
+				background-color: #c0392b;
+			}
+
+			button.save {
+				background-color: #2ecc71;
+			}
+
+			button.save:hover {
+				background-color: #27ae60;
+			}
+
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				margin-top: 20px;
+				border-radius: 8px;
+				overflow: hidden;
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+			}
+
+			th,
+			td {
+				border: 1px solid #e1e1e1;
+				padding: 10px 12px;
+				text-align: left;
+			}
+
+			th {
+				background-color: #3498db;
+				color: white;
+				position: sticky;
+				top: 0;
+				font-weight: 600;
+			}
+
+			tr:nth-child(even) {
+				background-color: #f8f9fa;
+			}
+
+			tr:hover {
+				background-color: #e8f4fc;
+			}
+
+			input {
+				width: 100%;
+				padding: 8px 10px;
+				border: 1px solid #ddd;
+				border-radius: 6px;
+				transition: border-color 0.3s;
+			}
+
+			input:focus {
+				outline: none;
+				border-color: #3498db;
+				box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+			}
+
+			.hidden {
+				display: none;
+			}
+
+			.file-input-container {
+				margin-bottom: 20px;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+			}
+
+			.file-input-container label {
+				display: inline-block;
+				padding: 12px 24px;
+				background-color: #3498db;
+				color: white;
+				border-radius: 8px;
+				cursor: pointer;
+				transition: all 0.3s ease;
+				font-weight: 500;
+				margin-bottom: 10px;
+				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+			}
+
+			.file-input-container label:hover {
+				background-color: #2980b9;
+				transform: translateY(-2px);
+				box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+			}
+
+			.file-input-container input[type='file'] {
+				display: none;
+			}
+
+			.action-cell {
+				white-space: nowrap;
+				width: 100px;
+			}
+
+			.editable {
+				cursor: pointer;
+				transition: background-color 0.2s;
+			}
+
+			.editable:hover {
+				background-color: #e1f0fa;
+			}
+
+			.editing {
+				padding: 0;
+			}
+
+			.editing input {
+				border: 2px solid #3498db;
+				border-radius: 4px;
+			}
+
+			.empty-table-message {
+				text-align: center;
+				padding: 40px;
+				color: #7f8c8d;
+				font-style: italic;
+			}
+
+			.instructions {
+				background-color: #f8f9fa;
+				padding: 15px;
+				border-radius: 8px;
+				margin-bottom: 20px;
+				border-left: 4px solid #3498db;
+			}
+
+			.instructions h3 {
+				margin-top: 0;
+				color: #2c3e50;
+			}
+
+			.instructions ul {
+				margin-bottom: 0;
+				padding-left: 20px;
+			}
+
+			.instructions li {
+				margin-bottom: 5px;
+			}
+
+			/* Стили для тостов */
+			.toast-container {
+				position: fixed;
+				top: 20px;
+				right: 20px;
+				z-index: 1000;
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+
+			.toast {
+				padding: 15px 20px;
+				border-radius: 8px;
+				color: white;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+				display: flex;
+				align-items: center;
+				max-width: 350px;
+				animation: slideIn 0.3s ease-out;
+				transition: transform 0.3s, opacity 0.3s;
+			}
+
+			.toast.success {
+				background-color: #2ecc71;
+			}
+
+			.toast.error {
+				background-color: #e74c3c;
+			}
+
+			.toast.info {
+				background-color: #3498db;
+			}
+
+			.toast.warning {
+				background-color: #f39c12;
+			}
+
+			.toast-icon {
+				margin-right: 12px;
+				font-size: 20px;
+			}
+
+			.toast-message {
+				flex: 1;
+			}
+
+			.toast-close {
+				background: none;
+				border: none;
+				color: white;
+				font-size: 18px;
+				cursor: pointer;
+				padding: 0;
+				margin-left: 10px;
+				width: 24px;
+				height: 24px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				border-radius: 50%;
+				transition: background-color 0.2s;
+			}
+
+			.toast-close:hover {
+				background-color: rgba(255, 255, 255, 0.2);
+			}
+
+			@keyframes slideIn {
+				from {
+					transform: translateX(100%);
+					opacity: 0;
+				}
+				to {
+					transform: translateX(0);
+					opacity: 1;
+				}
+			}
+
+			@keyframes slideOut {
+				from {
+					transform: translateX(0);
+					opacity: 1;
+				}
+				to {
+					transform: translateX(100%);
+					opacity: 0;
+				}
+			}
+
+			.toast.hiding {
+				animation: slideOut 0.3s ease-in forwards;
+			}
+
+			/* Стили для модального окна подтверждения удаления */
+			.modal-overlay {
+				position: fixed;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background-color: rgba(0, 0, 0, 0.5);
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				z-index: 1001;
+				opacity: 0;
+				visibility: hidden;
+				transition: opacity 0.3s, visibility 0.3s;
+			}
+
+			.modal-overlay.active {
+				opacity: 1;
+				visibility: visible;
+			}
+
+			.modal {
+				background-color: white;
+				border-radius: 12px;
+				box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+				width: 90%;
+				max-width: 450px;
+				transform: scale(0.9);
+				transition: transform 0.3s;
+			}
+
+			.modal-overlay.active .modal {
+				transform: scale(1);
+			}
+
+			.modal-header {
+				padding: 20px 25px 0;
+			}
+
+			.modal-title {
+				margin: 0;
+				font-size: 20px;
+				color: #2c3e50;
+				font-weight: 600;
+			}
+
+			.modal-body {
+				padding: 20px 25px;
+			}
+
+			.modal-message {
+				margin: 0;
+				color: #5a6c7d;
+				line-height: 1.5;
+			}
+
+			.modal-footer {
+				padding: 0 25px 20px;
+				display: flex;
+				justify-content: flex-end;
+				gap: 12px;
+			}
+
+			.modal-cancel {
+				background-color: #95a5a6;
+			}
+
+			.modal-cancel:hover {
+				background-color: #7f8c8d;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h1>Редактор CSV файлов</h1>
+
+			<div class="instructions">
+				<h3>Как использовать:</h3>
+				<ul>
+					<li>Загрузите CSV файл с помощью кнопки ниже</li>
+					<li>Для редактирования данных просто кликните на нужную ячейку</li>
+					<li>
+						Для сохранения изменений нажмите Enter или кликните вне поля ввода
+					</li>
+					<li>
+						Используйте кнопки для добавления новых строк или удаления
+						существующих
+					</li>
+					<li>Скачайте отредактированный файл в формате CSV</li>
+				</ul>
+			</div>
+
+			<div class="file-input-container">
+				<label for="csvFileInput">Выберите CSV файл</label>
+				<input type="file" id="csvFileInput" accept=".csv" />
+			</div>
+
+			<div class="controls">
+				<button id="addRowBtn">Добавить строку</button>
+				<button id="downloadBtn" class="save">Скачать CSV</button>
+			</div>
+
+			<div id="tableContainer">
+				<div id="emptyTableMessage" class="empty-table-message">
+					Загрузите CSV файл для начала работы
+				</div>
+				<table id="csvTable" class="hidden">
+					<thead>
+						<tr id="headerRow"></tr>
+					</thead>
+					<tbody id="tableBody"></tbody>
+				</table>
+			</div>
+		</div>
+
+		<!-- Контейнер для тостов -->
+		<div class="toast-container" id="toastContainer"></div>
+
+		<!-- Модальное окно подтверждения удаления -->
+		<div class="modal-overlay" id="deleteModal">
+			<div class="modal">
+				<div class="modal-header">
+					<h3 class="modal-title">Подтверждение удаления</h3>
+				</div>
+				<div class="modal-body">
+					<p class="modal-message">
+						Вы уверены, что хотите удалить эту строку? Это действие нельзя
+						отменить.
+					</p>
+				</div>
+				<div class="modal-footer">
+					<button class="modal-cancel" id="cancelDeleteBtn">Отмена</button>
+					<button class="delete" id="confirmDeleteBtn">Удалить</button>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			// Все поля теперь текстовые
+			const columnTypes = {
+				name: 'text',
+				segment: 'text',
+				state: 'text',
+				city: 'text',
+				order_date: 'text',
+				ship_mode: 'text',
+				sales: 'text',
+			}
+
+			let csvData = []
+			let currentEditCell = null
+			let pendingDeleteIndex = null
+
+			// Элементы DOM
+			const csvFileInput = document.getElementById('csvFileInput')
+			const tableContainer = document.getElementById('tableContainer')
+			const headerRow = document.getElementById('headerRow')
+			const tableBody = document.getElementById('tableBody')
+			const addRowBtn = document.getElementById('addRowBtn')
+			const downloadBtn = document.getElementById('downloadBtn')
+			const emptyTableMessage = document.getElementById('emptyTableMessage')
+			const csvTable = document.getElementById('csvTable')
+			const toastContainer = document.getElementById('toastContainer')
+			const deleteModal = document.getElementById('deleteModal')
+			const cancelDeleteBtn = document.getElementById('cancelDeleteBtn')
+			const confirmDeleteBtn = document.getElementById('confirmDeleteBtn')
+
+			// Обработчики событий
+			csvFileInput.addEventListener('change', handleFileUpload)
+			addRowBtn.addEventListener('click', addNewRow)
+			downloadBtn.addEventListener('click', downloadCSV)
+			cancelDeleteBtn.addEventListener('click', closeDeleteModal)
+			confirmDeleteBtn.addEventListener('click', confirmDelete)
+
+			// Загрузка CSV файла
+			function handleFileUpload(event) {
+				const file = event.target.files[0]
+				if (!file) return
+
+				showToast('Загрузка файла...', 'info')
+
+				const reader = new FileReader()
+				reader.onload = function (e) {
+					try {
+						const csvText = e.target.result
+						parseCSV(csvText)
+						renderTable()
+						showToast('Файл успешно загружен', 'success')
+					} catch (error) {
+						showToast('Ошибка при загрузке файла: ' + error.message, 'error')
+					}
+				}
+				reader.onerror = function () {
+					showToast('Ошибка при чтении файла', 'error')
+				}
+				reader.readAsText(file)
+			}
+
+			// Парсинг CSV
+			function parseCSV(csvText) {
+				const lines = csvText.trim().split('\n')
+				if (lines.length === 0) {
+					throw new Error('Файл пуст')
+				}
+
+				// Получаем заголовки
+				const headers = parseCSVLine(lines[0])
+				csvData = [headers]
+
+				// Парсим данные
+				for (let i = 1; i < lines.length; i++) {
+					const rowData = parseCSVLine(lines[i])
+					if (rowData.length === headers.length) {
+						csvData.push(rowData)
+					}
+				}
+			}
+
+			// Парсинг одной строки CSV
+			function parseCSVLine(line) {
+				const result = []
+				let current = ''
+				let inQuotes = false
+
+				for (let i = 0; i < line.length; i++) {
+					const char = line[i]
+
+					if (char === '"') {
+						inQuotes = !inQuotes
+					} else if (char === ',' && !inQuotes) {
+						result.push(current)
+						current = ''
+					} else {
+						current += char
+					}
+				}
+
+				result.push(current)
+				return result
+			}
+
+			// Отрисовка таблицы
+			function renderTable() {
+				// Очищаем таблицу
+				headerRow.innerHTML = ''
+				tableBody.innerHTML = ''
+
+				if (csvData.length === 0) {
+					emptyTableMessage.classList.remove('hidden')
+					csvTable.classList.add('hidden')
+					return
+				}
+
+				emptyTableMessage.classList.add('hidden')
+				csvTable.classList.remove('hidden')
+
+				const headers = csvData[0]
+
+				// Заголовки
+				headers.forEach(header => {
+					const th = document.createElement('th')
+					th.textContent = header
+					headerRow.appendChild(th)
+				})
+
+				// Добавляем колонку для действий
+				const actionsHeader = document.createElement('th')
+				actionsHeader.textContent = 'Действия'
+				headerRow.appendChild(actionsHeader)
+
+				// Данные
+				for (let i = 1; i < csvData.length; i++) {
+					const row = document.createElement('tr')
+					const rowData = csvData[i]
+
+					rowData.forEach((cell, cellIndex) => {
+						const td = document.createElement('td')
+						td.textContent = cell
+						td.className = 'editable'
+						td.dataset.row = i
+						td.dataset.col = cellIndex
+						td.addEventListener('click', handleCellClick)
+						row.appendChild(td)
+					})
+
+					// Кнопка удаления
+					const actionsCell = document.createElement('td')
+					actionsCell.className = 'action-cell'
+
+					const deleteButton = document.createElement('button')
+					deleteButton.textContent = 'Удалить'
+					deleteButton.className = 'delete'
+					deleteButton.addEventListener('click', () => openDeleteModal(i))
+
+					actionsCell.appendChild(deleteButton)
+					row.appendChild(actionsCell)
+
+					tableBody.appendChild(row)
+				}
+			}
+
+			// Обработка клика по ячейке для редактирования
+			function handleCellClick(event) {
+				// Если уже редактируем другую ячейку, сначала завершаем это редактирование
+				if (currentEditCell) {
+					finishEditing()
+				}
+
+				const cell = event.target
+				const rowIndex = parseInt(cell.dataset.row)
+				const colIndex = parseInt(cell.dataset.col)
+
+				// Сохраняем исходное значение
+				const originalValue = cell.textContent
+
+				// Очищаем ячейку
+				cell.textContent = ''
+				cell.classList.add('editing')
+
+				// Создаем элемент для редактирования
+				const input = document.createElement('input')
+				input.type = 'text'
+				input.value = originalValue
+
+				// Обработчики событий для завершения редактирования
+				const finishHandler = () => {
+					finishEditing()
+				}
+
+				const keydownHandler = e => {
+					if (e.key === 'Enter') {
+						finishEditing()
+					} else if (e.key === 'Escape') {
+						cancelEditing()
+					}
+				}
+
+				input.addEventListener('blur', finishHandler)
+				input.addEventListener('keydown', keydownHandler)
+
+				cell.appendChild(input)
+				input.focus()
+
+				currentEditCell = {
+					cell: cell,
+					rowIndex: rowIndex,
+					colIndex: colIndex,
+					input: input,
+					originalValue: originalValue,
+					finishHandler: finishHandler,
+					keydownHandler: keydownHandler,
+				}
+			}
+
+			// Завершение редактирования
+			function finishEditing() {
+				if (!currentEditCell) return
+
+				const {
+					cell,
+					rowIndex,
+					colIndex,
+					input,
+					originalValue,
+					finishHandler,
+					keydownHandler,
+				} = currentEditCell
+				const newValue = input.value
+
+				// Удаляем обработчики
+				input.removeEventListener('blur', finishHandler)
+				input.removeEventListener('keydown', keydownHandler)
+
+				// Обновляем данные
+				if (csvData[rowIndex] && colIndex >= 0) {
+					csvData[rowIndex][colIndex] = newValue
+
+					// Обновляем отображение
+					cell.textContent = newValue
+					cell.classList.remove('editing')
+					cell.classList.add('editable')
+
+					// Восстанавливаем обработчик клика
+					cell.addEventListener('click', handleCellClick)
+
+					currentEditCell = null
+
+					if (newValue !== originalValue) {
+						showToast('Изменения сохранены', 'success')
+					}
+				} else {
+					// Если данные недоступны, просто отменяем редактирование
+					cancelEditing()
+					showToast('Ошибка при сохранении данных', 'error')
+				}
+			}
+
+			// Отмена редактирования
+			function cancelEditing() {
+				if (!currentEditCell) return
+
+				const { cell, originalValue, input, finishHandler, keydownHandler } =
+					currentEditCell
+
+				// Удаляем обработчики
+				input.removeEventListener('blur', finishHandler)
+				input.removeEventListener('keydown', keydownHandler)
+
+				// Восстанавливаем исходное значение
+				cell.textContent = originalValue
+				cell.classList.remove('editing')
+				cell.classList.add('editable')
+
+				// Восстанавливаем обработчик клика
+				cell.addEventListener('click', handleCellClick)
+
+				currentEditCell = null
+				showToast('Изменения отменены', 'warning')
+			}
+
+			// Открытие модального окна подтверждения удаления
+			function openDeleteModal(index) {
+				pendingDeleteIndex = index
+				deleteModal.classList.add('active')
+			}
+
+			// Закрытие модального окна подтверждения удаления
+			function closeDeleteModal() {
+				deleteModal.classList.remove('active')
+				pendingDeleteIndex = null
+			}
+
+			// Подтверждение удаления
+			function confirmDelete() {
+				if (pendingDeleteIndex !== null) {
+					csvData.splice(pendingDeleteIndex, 1)
+					renderTable()
+					closeDeleteModal()
+					showToast('Строка удалена', 'success')
+				}
+			}
+
+			// Добавление новой строки
+			function addNewRow() {
+				if (csvData.length === 0) {
+					showToast('Сначала загрузите CSV файл', 'error')
+					return
+				}
+
+				const headers = csvData[0]
+				const newRow = headers.map(() => '')
+				csvData.push(newRow)
+				renderTable()
+				showToast('Новая строка добавлена', 'success')
+			}
+
+			// Скачивание CSV
+			function downloadCSV() {
+				if (csvData.length === 0) {
+					showToast('Нет данных для скачивания', 'error')
+					return
+				}
+
+				let csvContent = ''
+
+				csvData.forEach(row => {
+					const escapedRow = row.map(cell => {
+						// Экранируем кавычки и добавляем кавычки, если есть запятые или переносы строк
+						if (
+							cell.includes(',') ||
+							cell.includes('"') ||
+							cell.includes('\n')
+						) {
+							return '"' + cell.replace(/"/g, '""') + '"'
+						}
+						return cell
+					})
+					csvContent += escapedRow.join(',') + '\n'
+				})
+
+				const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+				const url = URL.createObjectURL(blob)
+				const link = document.createElement('a')
+				link.setAttribute('href', url)
+				link.setAttribute('download', 'edited_data.csv')
+				link.style.visibility = 'hidden'
+				document.body.appendChild(link)
+				link.click()
+				document.body.removeChild(link)
+
+				showToast('Файл готов к скачиванию', 'success')
+			}
+
+			// Показ тоста
+			function showToast(message, type = 'info') {
+				const toast = document.createElement('div')
+				toast.className = `toast ${type}`
+
+				// Иконка в зависимости от типа
+				const icon = document.createElement('span')
+				icon.className = 'toast-icon'
+
+				switch (type) {
+					case 'success':
+						icon.textContent = '✓'
+						break
+					case 'error':
+						icon.textContent = '✗'
+						break
+					case 'warning':
+						icon.textContent = '⚠'
+						break
+					default:
+						icon.textContent = 'ℹ'
+				}
+
+				const messageSpan = document.createElement('span')
+				messageSpan.className = 'toast-message'
+				messageSpan.textContent = message
+
+				const closeButton = document.createElement('button')
+				closeButton.className = 'toast-close'
+				closeButton.textContent = '×'
+				closeButton.addEventListener('click', () => {
+					hideToast(toast)
+				})
+
+				toast.appendChild(icon)
+				toast.appendChild(messageSpan)
+				toast.appendChild(closeButton)
+
+				toastContainer.appendChild(toast)
+
+				// Автоматическое скрытие через 5 секунд
+				setTimeout(() => {
+					hideToast(toast)
+				}, 5000)
+			}
+
+			// Скрытие тоста
+			function hideToast(toast) {
+				if (!toast.parentNode) return
+
+				toast.classList.add('hiding')
+				setTimeout(() => {
+					if (toast.parentNode) {
+						toast.parentNode.removeChild(toast)
+					}
+				}, 300)
+			}
+		</script>
+	</body>
+</html>

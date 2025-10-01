@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ru">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Анализ выручки по штатам</title>
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				max-width: 1200px;
+				margin: 0 auto;
+				padding: 20px;
+				background-color: #f5f5f5;
+			}
+			.container {
+				background-color: white;
+				padding: 20px;
+				border-radius: 8px;
+				box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+			}
+			h1 {
+				color: #333;
+				text-align: center;
+			}
+			.file-input-container {
+				margin-bottom: 20px;
+				padding: 15px;
+				background-color: #f0f8ff;
+				border-radius: 5px;
+			}
+			.controls {
+				margin-bottom: 20px;
+				display: flex;
+				gap: 15px;
+				align-items: center;
+				flex-wrap: wrap;
+			}
+			select,
+			button {
+				padding: 8px 12px;
+				border: 1px solid #ddd;
+				border-radius: 4px;
+				font-size: 14px;
+			}
+			button {
+				background-color: #4caf50;
+				color: white;
+				cursor: pointer;
+				transition: background-color 0.3s;
+			}
+			button:hover {
+				background-color: #45a049;
+			}
+			button:disabled {
+				background-color: #cccccc;
+				cursor: not-allowed;
+			}
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				margin-top: 20px;
+				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+			}
+			th,
+			td {
+				border: 1px solid #ddd;
+				padding: 12px;
+				text-align: left;
+			}
+			th {
+				background-color: #2c5aa0;
+				color: white;
+				font-weight: bold;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+			}
+			tr:nth-child(even) {
+				background-color: #f8f9fa;
+			}
+			tr:hover {
+				background-color: #e9ecef;
+				transition: background-color 0.2s;
+			}
+			.stats {
+				margin: 20px 0;
+				padding: 15px;
+				background-color: #f0f8ff;
+				border-radius: 5px;
+				font-size: 16px;
+				font-weight: bold;
+			}
+			.chart-container {
+				margin-top: 30px;
+				height: 400px;
+			}
+			.error {
+				color: red;
+				margin-top: 10px;
+				padding: 10px;
+				background-color: #ffe6e6;
+				border-radius: 4px;
+			}
+			.hidden {
+				display: none;
+			}
+			#tableTitle {
+				color: #2c5aa0;
+				border-bottom: 2px solid #2c5aa0;
+				padding-bottom: 10px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<h1>Анализ выручки по штатам (топ 10)</h1>
+
+			<div class="file-input-container">
+				<label for="csvFile">Выберите CSV файл:</label>
+				<input type="file" id="csvFile" accept=".csv" />
+				<span id="fileError" class="error hidden"></span>
+			</div>
+
+			<div class="controls">
+				<label for="yearSelect">Выберите год:</label>
+				<select id="yearSelect" disabled>
+					<option value="">-- Выберите год --</option>
+				</select>
+				<button id="analyzeBtn" disabled>Анализировать</button>
+			</div>
+
+			<div id="results" class="hidden">
+				<h2 id="tableTitle"></h2>
+				<table id="resultsTable">
+					<thead>
+						<tr>
+							<th>№</th>
+							<th>Штат</th>
+							<th>Количество заказов</th>
+							<th>Выручка ($)</th>
+						</tr>
+					</thead>
+					<tbody id="tableBody"></tbody>
+				</table>
+
+				<div class="stats">
+					<p id="totalRevenue"></p>
+					<p id="top10Revenue"></p>
+					<p id="top10Percentage"></p>
+				</div>
+
+				<div class="chart-container">
+					<canvas id="revenueChart"></canvas>
+				</div>
+			</div>
+		</div>
+		<div style="display: flex; justify-content: center; margin-top: 30px">
+			<a
+				style="text-decoration: none; color: #333; padding: 10px"
+				href="csv_editor.html"
+				>Редактор csv-файлов</a
+			>
+		</div>
+
+		<script>
+			// Элементы DOM
+			const csvFileInput = document.getElementById('csvFile')
+			const yearSelect = document.getElementById('yearSelect')
+			const analyzeBtn = document.getElementById('analyzeBtn')
+			const resultsDiv = document.getElementById('results')
+			const tableTitle = document.getElementById('tableTitle')
+			const tableBody = document.getElementById('tableBody')
+			const totalRevenueEl = document.getElementById('totalRevenue')
+			const top10RevenueEl = document.getElementById('top10Revenue')
+			const top10PercentageEl = document.getElementById('top10Percentage')
+			const fileError = document.getElementById('fileError')
+			let revenueChart = null
+
+			// Переменные для хранения данных
+			let csvData = []
+			let availableYears = []
+
+			// Обработчик загрузки файла
+			csvFileInput.addEventListener('change', function (e) {
+				const file = e.target.files[0]
+
+				// Валидация файла
+				if (!file) {
+					resetUI()
+					return
+				}
+
+				if (!file.name.toLowerCase().endsWith('.csv')) {
+					showError('Пожалуйста, выберите файл в формате CSV.')
+					resetUI()
+					return
+				}
+
+				fileError.classList.add('hidden')
+
+				// Чтение файла
+				const reader = new FileReader()
+				reader.onload = function (event) {
+					try {
+						const text = event.target.result
+						parseCSV(text)
+						extractYears()
+						populateYearSelect()
+						analyzeBtn.disabled = false
+					} catch (error) {
+						showError('Ошибка при чтении файла: ' + error.message)
+						resetUI()
+					}
+				}
+				reader.onerror = function () {
+					showError('Ошибка при чтении файла.')
+					resetUI()
+				}
+				reader.readAsText(file)
+			})
+
+			// Обработчик кнопки анализа
+			analyzeBtn.addEventListener('click', function () {
+				const selectedYear = yearSelect.value
+				if (!selectedYear) {
+					alert('Пожалуйста, выберите год.')
+					return
+				}
+
+				analyzeData(selectedYear)
+			})
+
+			// Функция парсинга CSV
+			function parseCSV(text) {
+				const lines = text.split('\n').filter(line => line.trim() !== '')
+
+				if (lines.length < 2) {
+					throw new Error('Файл слишком короткий или пустой.')
+				}
+
+				// Получаем заголовки
+				const headers = lines[0].split(',').map(header => header.trim())
+
+				// Проверяем наличие необходимых колонок
+				const requiredColumns = ['state', 'order_date', 'sales']
+				const missingColumns = requiredColumns.filter(
+					col => !headers.includes(col)
+				)
+
+				if (missingColumns.length > 0) {
+					throw new Error(
+						'В файле отсутствуют необходимые колонки: ' +
+							missingColumns.join(', ')
+					)
+				}
+
+				// Парсим данные
+				csvData = []
+				for (let i = 1; i < lines.length; i++) {
+					const values = parseCSVLine(lines[i])
+					if (values.length !== headers.length) {
+						console.warn(
+							`Строка ${
+								i + 1
+							} имеет неверное количество полей и будет пропущена.`
+						)
+						continue
+					}
+
+					const row = {}
+					headers.forEach((header, index) => {
+						row[header] = values[index].trim()
+					})
+
+					// Проверяем, что sales - это число
+					const sales = parseFloat(row.sales)
+					if (isNaN(sales)) {
+						console.warn(
+							`Строка ${i + 1} содержит неверное значение продаж: ${row.sales}`
+						)
+						continue
+					}
+
+					// Извлекаем год из даты
+					const dateParts = row.order_date.split('-')
+					if (dateParts.length < 1) {
+						console.warn(
+							`Строка ${i + 1} содержит неверную дату: ${row.order_date}`
+						)
+						continue
+					}
+
+					row.year = parseInt(dateParts[0])
+					row.salesValue = sales
+
+					csvData.push(row)
+				}
+
+				if (csvData.length === 0) {
+					throw new Error('В файле нет корректных данных для анализа.')
+				}
+
+				console.log(`Успешно загружено ${csvData.length} строк данных.`)
+			}
+
+			// Функция для корректного парсинга строк CSV (учитывает кавычки)
+			function parseCSVLine(line) {
+				const result = []
+				let current = ''
+				let inQuotes = false
+
+				for (let i = 0; i < line.length; i++) {
+					const char = line[i]
+
+					if (char === '"') {
+						inQuotes = !inQuotes
+					} else if (char === ',' && !inQuotes) {
+						result.push(current)
+						current = ''
+					} else {
+						current += char
+					}
+				}
+
+				result.push(current)
+				return result
+			}
+
+			// Извлечение доступных годов из данных
+			function extractYears() {
+				const yearsSet = new Set()
+				csvData.forEach(row => {
+					if (row.year && !isNaN(row.year)) {
+						yearsSet.add(row.year)
+					}
+				})
+
+				availableYears = Array.from(yearsSet).sort((a, b) => a - b)
+			}
+
+			// Заполнение выпадающего списка годов
+			function populateYearSelect() {
+				yearSelect.innerHTML = '<option value="">-- Выберите год --</option>'
+				availableYears.forEach(year => {
+					const option = document.createElement('option')
+					option.value = year
+					option.textContent = year
+					yearSelect.appendChild(option)
+				})
+				yearSelect.disabled = false
+			}
+
+			// Анализ данных за выбранный год
+			function analyzeData(year) {
+				// Фильтруем данные по году
+				const yearData = csvData.filter(row => row.year === parseInt(year))
+
+				if (yearData.length === 0) {
+					alert(`Нет данных за ${year} год.`)
+					return
+				}
+
+				// Группируем по штатам
+				const stateData = {}
+				yearData.forEach(row => {
+					if (!stateData[row.state]) {
+						stateData[row.state] = {
+							orders: 0,
+							revenue: 0,
+						}
+					}
+					stateData[row.state].orders += 1
+					stateData[row.state].revenue += row.salesValue
+				})
+
+				// Преобразуем в массив и сортируем по выручке
+				const stateArray = Object.keys(stateData).map(state => ({
+					state,
+					orders: stateData[state].orders,
+					revenue: stateData[state].revenue,
+				}))
+
+				stateArray.sort((a, b) => b.revenue - a.revenue)
+
+				// Берем топ-10
+				const top10 = stateArray.slice(0, 10)
+
+				// Вычисляем общую выручку за год
+				const totalRevenue = yearData.reduce(
+					(sum, row) => sum + row.salesValue,
+					0
+				)
+
+				// Вычисляем выручку топ-10 штатов
+				const top10Revenue = top10.reduce(
+					(sum, state) => sum + state.revenue,
+					0
+				)
+
+				// Вычисляем долю топ-10
+				const top10Percentage = ((top10Revenue / totalRevenue) * 100).toFixed(2)
+
+				// Отображаем результаты
+				displayResults(year, top10, totalRevenue, top10Revenue, top10Percentage)
+
+				// Строим диаграмму
+				buildChart(top10, year)
+			}
+
+			// Отображение результатов в таблице
+			function displayResults(
+				year,
+				top10,
+				totalRevenue,
+				top10Revenue,
+				top10Percentage
+			) {
+				// Обновляем заголовок
+				tableTitle.textContent = `Выручка по штатам за ${year} год (топ 10)`
+
+				// Очищаем таблицу
+				tableBody.innerHTML = ''
+
+				// Заполняем таблицу
+				top10.forEach((state, index) => {
+					const row = document.createElement('tr')
+
+					const numberCell = document.createElement('td')
+					numberCell.textContent = index + 1
+
+					const stateCell = document.createElement('td')
+					stateCell.textContent = state.state
+
+					const ordersCell = document.createElement('td')
+					ordersCell.textContent = state.orders
+
+					const revenueCell = document.createElement('td')
+					revenueCell.textContent = formatCurrency(state.revenue)
+
+					row.appendChild(numberCell)
+					row.appendChild(stateCell)
+					row.appendChild(ordersCell)
+					row.appendChild(revenueCell)
+
+					tableBody.appendChild(row)
+				})
+
+				// Обновляем статистику
+				totalRevenueEl.textContent = `Общая выручка за ${year} год: ${formatCurrency(
+					totalRevenue
+				)}`
+				top10RevenueEl.textContent = `Выручка топ 10 штатов: ${formatCurrency(
+					top10Revenue
+				)}`
+				top10PercentageEl.textContent = `Доля топ 10 штатов: ${top10Percentage}%`
+
+				// Показываем результаты
+				resultsDiv.classList.remove('hidden')
+			}
+
+			// Форматирование валюты
+			function formatCurrency(amount) {
+				return '$' + amount.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')
+			}
+
+			// Построение диаграммы
+			function buildChart(top10, year) {
+				const ctx = document.getElementById('revenueChart').getContext('2d')
+
+				// Уничтожаем предыдущую диаграмму, если она существует
+				if (revenueChart) {
+					revenueChart.destroy()
+				}
+
+				// Подготавливаем данные для диаграммы
+				const labels = top10.map(state => state.state)
+				const data = top10.map(state => state.revenue)
+
+				// Создаем диаграмму
+				revenueChart = new Chart(ctx, {
+					type: 'bar',
+					data: {
+						labels: labels,
+						datasets: [
+							{
+								label: `Выручка по штатам за ${year} год ($)`,
+								data: data,
+								backgroundColor: [
+									'rgba(255, 99, 132, 0.7)',
+									'rgba(54, 162, 235, 0.7)',
+									'rgba(255, 206, 86, 0.7)',
+									'rgba(75, 192, 192, 0.7)',
+									'rgba(153, 102, 255, 0.7)',
+									'rgba(255, 159, 64, 0.7)',
+									'rgba(199, 199, 199, 0.7)',
+									'rgba(83, 102, 255, 0.7)',
+									'rgba(40, 159, 64, 0.7)',
+									'rgba(210, 99, 132, 0.7)',
+								],
+								borderColor: [
+									'rgba(255, 99, 132, 1)',
+									'rgba(54, 162, 235, 1)',
+									'rgba(255, 206, 86, 1)',
+									'rgba(75, 192, 192, 1)',
+									'rgba(153, 102, 255, 1)',
+									'rgba(255, 159, 64, 1)',
+									'rgba(199, 199, 199, 1)',
+									'rgba(83, 102, 255, 1)',
+									'rgba(40, 159, 64, 1)',
+									'rgba(210, 99, 132, 1)',
+								],
+								borderWidth: 1,
+							},
+						],
+					},
+					options: {
+						responsive: true,
+						maintainAspectRatio: false,
+						scales: {
+							y: {
+								beginAtZero: true,
+								title: {
+									display: true,
+									text: 'Выручка ($)',
+								},
+							},
+							x: {
+								title: {
+									display: true,
+									text: 'Штаты',
+								},
+							},
+						},
+						plugins: {
+							legend: {
+								display: false,
+							},
+							tooltip: {
+								callbacks: {
+									label: function (context) {
+										return `Выручка: ${formatCurrency(context.raw)}`
+									},
+								},
+							},
+						},
+					},
+				})
+			}
+
+			// Показать ошибку
+			function showError(message) {
+				fileError.textContent = message
+				fileError.classList.remove('hidden')
+			}
+
+			// Сброс интерфейса
+			function resetUI() {
+				csvData = []
+				availableYears = []
+				yearSelect.innerHTML = '<option value="">-- Выберите год --</option>'
+				yearSelect.disabled = true
+				analyzeBtn.disabled = true
+				resultsDiv.classList.add('hidden')
+				if (revenueChart) {
+					revenueChart.destroy()
+					revenueChart = null
+				}
+			}
+		</script>
+	</body>
+</html>
