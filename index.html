@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Анализ выручки по штатам</title>
+		<title>Анализ выручки по городам</title>
 		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 		<style>
 			body {
@@ -109,16 +109,177 @@
 				border-bottom: 2px solid #2c5aa0;
 				padding-bottom: 10px;
 			}
+
+			/* Стили для toast-уведомлений */
+			.toast-container {
+				position: fixed;
+				bottom: 20px;
+				right: 20px;
+				z-index: 1000;
+				max-width: 400px;
+			}
+
+			.toast {
+				background-color: #323232;
+				color: white;
+				padding: 16px 24px;
+				margin-top: 10px;
+				border-radius: 4px;
+				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				animation: slideIn 0.3s ease-out;
+			}
+
+			.toast.error {
+				background-color: #d32f2f;
+			}
+
+			.toast.warning {
+				background-color: #f57c00;
+			}
+
+			.toast.success {
+				background-color: #388e3c;
+			}
+
+			.toast.info {
+				background-color: #1976d2;
+			}
+
+			.toast.fields-info {
+				background-color: #7b1fa2;
+				max-width: 500px;
+			}
+
+			.toast-close {
+				background: none;
+				border: none;
+				color: white;
+				font-size: 18px;
+				cursor: pointer;
+				margin-left: 10px;
+			}
+
+			.toast-fields-content {
+				flex: 1;
+			}
+
+			.toast-fields-title {
+				font-weight: bold;
+				margin-bottom: 8px;
+				font-size: 16px;
+			}
+
+			.fields-present,
+			.fields-missing {
+				margin: 4px 0;
+				padding: 4px 8px;
+				border-radius: 3px;
+			}
+
+			.fields-present {
+				background-color: rgba(76, 175, 80, 0.2);
+				border-left: 3px solid #4caf50;
+			}
+
+			.fields-missing {
+				background-color: rgba(244, 67, 54, 0.2);
+				border-left: 3px solid #f44336;
+			}
+
+			@keyframes slideIn {
+				from {
+					transform: translateX(100%);
+					opacity: 0;
+				}
+				to {
+					transform: translateX(0);
+					opacity: 1;
+				}
+			}
+
+			/* Стили для блока качества данных */
+			.quality-report {
+				margin: 20px 0;
+				padding: 15px;
+				background-color: #fff8e1;
+				border-radius: 5px;
+				border-left: 4px solid #ffc107;
+			}
+
+			.quality-report h3 {
+				margin-top: 0;
+				color: #ff8f00;
+			}
+
+			.quality-stats {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 10px;
+				margin: 10px 0;
+			}
+
+			.quality-stat {
+				padding: 8px;
+				background-color: #fff3cd;
+				border-radius: 4px;
+			}
+
+			.field-validation {
+				margin: 15px 0;
+				padding: 15px;
+				background-color: #e8f5e9;
+				border-radius: 5px;
+				border-left: 4px solid #4caf50;
+			}
+
+			.field-list {
+				list-style-type: none;
+				padding: 0;
+			}
+
+			.field-item {
+				padding: 5px 0;
+				display: flex;
+				align-items: center;
+			}
+
+			.field-valid {
+				color: #4caf50;
+				margin-right: 8px;
+				font-weight: bold;
+			}
+
+			.field-invalid {
+				color: #f44336;
+				margin-right: 8px;
+				font-weight: bold;
+			}
 		</style>
 	</head>
 	<body>
 		<div class="container">
-			<h1>Анализ выручки по штатам (топ 10)</h1>
+			<h1>Анализ выручки по городам (топ 10)</h1>
 
 			<div class="file-input-container">
 				<label for="csvFile">Выберите CSV файл:</label>
 				<input type="file" id="csvFile" accept=".csv" />
 				<span id="fileError" class="error hidden"></span>
+			</div>
+
+			<!-- Блок информации о полях (для первого набора данных) -->
+			<div id="fieldValidation" class="field-validation hidden">
+				<h3>Информация о полях файла:</h3>
+				<ul id="fieldValidationList" class="field-list"></ul>
+			</div>
+
+			<!-- Блок качества данных (для второго набора данных) -->
+			<div id="dataQuality" class="quality-report hidden">
+				<h3>Качество данных</h3>
+				<div id="qualityStats" class="quality-stats"></div>
+				<div id="validRowsInfo"></div>
 			</div>
 
 			<div class="controls">
@@ -135,9 +296,10 @@
 					<thead>
 						<tr>
 							<th>№</th>
+							<th>Город</th>
 							<th>Штат</th>
-							<th>Количество заказов</th>
 							<th>Выручка ($)</th>
+							<th>Доля (%)</th>
 						</tr>
 					</thead>
 					<tbody id="tableBody"></tbody>
@@ -145,8 +307,8 @@
 
 				<div class="stats">
 					<p id="totalRevenue"></p>
-					<p id="top10Revenue"></p>
-					<p id="top10Percentage"></p>
+					<p id="allYearsRevenue"></p>
+					<p id="yearPercentage"></p>
 				</div>
 
 				<div class="chart-container">
@@ -154,13 +316,9 @@
 				</div>
 			</div>
 		</div>
-		<div style="display: flex; justify-content: center; margin-top: 30px">
-			<a
-				style="text-decoration: none; color: #333; padding: 10px"
-				href="csv_editor.html"
-				>Редактор csv-файлов</a
-			>
-		</div>
+
+		<!-- Контейнер для toast-уведомлений -->
+		<div class="toast-container" id="toastContainer"></div>
 
 		<script>
 			// Элементы DOM
@@ -171,32 +329,123 @@
 			const tableTitle = document.getElementById('tableTitle')
 			const tableBody = document.getElementById('tableBody')
 			const totalRevenueEl = document.getElementById('totalRevenue')
-			const top10RevenueEl = document.getElementById('top10Revenue')
-			const top10PercentageEl = document.getElementById('top10Percentage')
+			const allYearsRevenueEl = document.getElementById('allYearsRevenue')
+			const yearPercentageEl = document.getElementById('yearPercentage')
 			const fileError = document.getElementById('fileError')
+			const fieldValidation = document.getElementById('fieldValidation')
+			const fieldValidationList = document.getElementById('fieldValidationList')
+			const dataQuality = document.getElementById('dataQuality')
+			const qualityStats = document.getElementById('qualityStats')
+			const validRowsInfo = document.getElementById('validRowsInfo')
+			const toastContainer = document.getElementById('toastContainer')
 			let revenueChart = null
+
+			// Обязательные поля
+			const requiredFields = [
+				'name',
+				'segment',
+				'state',
+				'city',
+				'order_date',
+				'ship_mode',
+				'sales',
+			]
 
 			// Переменные для хранения данных
 			let csvData = []
 			let availableYears = []
+			let dataQualityStats = {
+				totalRows: 0,
+				invalidDateRows: 0,
+				missingValueRows: 0,
+				outlierRows: 0,
+				validRows: 0,
+			}
+
+			// Функция для показа toast-уведомлений
+			function showToast(message, type = 'info', duration = 5000) {
+				const toast = document.createElement('div')
+				toast.className = `toast ${type}`
+
+				if (type === 'fields-info') {
+					toast.innerHTML = `
+                    <div class="toast-fields-content">${message}</div>
+                `
+				} else {
+					toast.innerHTML = `
+                    <span>${message}</span>
+                    <button class="toast-close">&times;</button>
+                `
+
+					// Обработчик закрытия toast только для обычных уведомлений
+					const closeBtn = toast.querySelector('.toast-close')
+					closeBtn.addEventListener('click', () => {
+						toast.remove()
+					})
+				}
+
+				toastContainer.appendChild(toast)
+
+				// Автоматическое закрытие только для обычных уведомлений
+				if (duration > 0 && type !== 'fields-info') {
+					setTimeout(() => {
+						if (toast.parentNode) {
+							toast.remove()
+						}
+					}, duration)
+				}
+
+				return toast
+			}
+
+			// Функция для показа информации о полях в формате toast
+			function showFieldsToast(headers, missingColumns) {
+				// Удаляем предыдущие toast с информацией о полях
+				const existingFieldsToasts =
+					toastContainer.querySelectorAll('.toast.fields-info')
+				existingFieldsToasts.forEach(toast => toast.remove())
+
+				const presentFields = requiredFields.filter(field =>
+					headers.includes(field)
+				)
+
+				const message = `
+                <div class="toast-fields-title">Информация о полях файла:</div>
+                <div class="fields-present">
+                    <strong>✓ Найдены поля:</strong> ${presentFields.join(', ')}
+                </div>
+                <div class="fields-missing">
+                    <strong>✗ Отсутствуют поля:</strong> ${missingColumns.join(
+											', '
+										)}
+                </div>
+            `
+
+				// Создаем non-closable toast
+				showToast(message, 'fields-info', 0)
+			}
 
 			// Обработчик загрузки файла
 			csvFileInput.addEventListener('change', function (e) {
 				const file = e.target.files[0]
 
+				// Сбрасываем UI
+				resetUI()
+
 				// Валидация файла
 				if (!file) {
-					resetUI()
 					return
 				}
 
 				if (!file.name.toLowerCase().endsWith('.csv')) {
 					showError('Пожалуйста, выберите файл в формате CSV.')
-					resetUI()
+					showToast('Пожалуйста, выберите файл в формате CSV.', 'error')
 					return
 				}
 
 				fileError.classList.add('hidden')
+				fieldValidation.classList.add('hidden')
+				dataQuality.classList.add('hidden')
 
 				// Чтение файла
 				const reader = new FileReader()
@@ -204,16 +453,16 @@
 					try {
 						const text = event.target.result
 						parseCSV(text)
-						extractYears()
-						populateYearSelect()
-						analyzeBtn.disabled = false
 					} catch (error) {
 						showError('Ошибка при чтении файла: ' + error.message)
+						// Всегда показываем toast с ошибкой
+						showToast('Ошибка при чтении файла: ' + error.message, 'error')
 						resetUI()
 					}
 				}
 				reader.onerror = function () {
 					showError('Ошибка при чтении файла.')
+					showToast('Ошибка при чтении файла.', 'error')
 					resetUI()
 				}
 				reader.readAsText(file)
@@ -223,39 +472,57 @@
 			analyzeBtn.addEventListener('click', function () {
 				const selectedYear = yearSelect.value
 				if (!selectedYear) {
-					alert('Пожалуйста, выберите год.')
+					showToast('Пожалуйста, выберите год.', 'warning')
 					return
 				}
 
 				analyzeData(selectedYear)
 			})
 
-			// Функция парсинга CSV
+			// Функция парсинга CSV с улучшенной валидацией
 			function parseCSV(text) {
 				const lines = text.split('\n').filter(line => line.trim() !== '')
+				dataQualityStats = {
+					totalRows: 0,
+					invalidDateRows: 0,
+					missingValueRows: 0,
+					outlierRows: 0,
+					validRows: 0,
+				}
 
-				if (lines.length < 2) {
-					throw new Error('Файл слишком короткий или пустой.')
+				// Валидация пустого файла
+				if (lines.length === 0) {
+					throw new Error('Файл пустой.')
+				}
+
+				// Валидация файла только с заголовками
+				if (lines.length === 1) {
+					throw new Error('Файл содержит только заголовки без данных.')
 				}
 
 				// Получаем заголовки
 				const headers = lines[0].split(',').map(header => header.trim())
 
 				// Проверяем наличие необходимых колонок
-				const requiredColumns = ['state', 'order_date', 'sales']
-				const missingColumns = requiredColumns.filter(
+				const missingColumns = requiredFields.filter(
 					col => !headers.includes(col)
 				)
 
+				// Для первого набора данных - проверяем поля и показываем отчет
 				if (missingColumns.length > 0) {
-					throw new Error(
-						'В файле отсутствуют необходимые колонки: ' +
-							missingColumns.join(', ')
-					)
+					showFieldValidationReport(headers, missingColumns)
+					showFieldsToast(headers, missingColumns)
+					throw new Error('CSV файл не содержит всех обязательных полей')
 				}
 
-				// Парсим данные
+				// Для второго набора данных - парсим с валидацией данных
+				dataQualityStats.totalRows = lines.length - 1
+
+				// Парсим данные с улучшенной валидацией
 				csvData = []
+				let errorCount = 0
+				let warningCount = 0
+
 				for (let i = 1; i < lines.length; i++) {
 					const values = parseCSVLine(lines[i])
 					if (values.length !== headers.length) {
@@ -264,6 +531,8 @@
 								i + 1
 							} имеет неверное количество полей и будет пропущена.`
 						)
+						dataQualityStats.missingValueRows++
+						errorCount++
 						continue
 					}
 
@@ -272,28 +541,97 @@
 						row[header] = values[index].trim()
 					})
 
-					// Проверяем, что sales - это число
+					// Валидация обязательных полей
+					const missingValues = requiredFields.filter(
+						field => !row[field] || row[field] === ''
+					)
+					if (missingValues.length > 0) {
+						dataQualityStats.missingValueRows++
+						errorCount++
+						continue
+					}
+
+					// Валидация продаж (число и положительное значение)
 					const sales = parseFloat(row.sales)
 					if (isNaN(sales)) {
-						console.warn(
-							`Строка ${i + 1} содержит неверное значение продаж: ${row.sales}`
-						)
+						dataQualityStats.outlierRows++
+						errorCount++
 						continue
 					}
 
-					// Извлекаем год из даты
+					// Валидация отрицательных значений и выбросов
+					let isOutlier = false
+					if (sales < 0) {
+						dataQualityStats.outlierRows++
+						warningCount++
+						isOutlier = true
+					}
+
+					// Валидация выбросов (слишком большие значения)
+					if (sales > 1000000) {
+						dataQualityStats.outlierRows++
+						warningCount++
+						isOutlier = true
+					}
+
+					// Пропускаем строки с выбросами
+					if (isOutlier) {
+						continue
+					}
+
+					// Валидация даты
 					const dateParts = row.order_date.split('-')
-					if (dateParts.length < 1) {
-						console.warn(
-							`Строка ${i + 1} содержит неверную дату: ${row.order_date}`
-						)
+					if (dateParts.length !== 3) {
+						dataQualityStats.invalidDateRows++
+						errorCount++
 						continue
 					}
 
-					row.year = parseInt(dateParts[0])
+					const year = parseInt(dateParts[0])
+					const month = parseInt(dateParts[1])
+					const day = parseInt(dateParts[2])
+
+					if (
+						isNaN(year) ||
+						isNaN(month) ||
+						isNaN(day) ||
+						year < 2000 ||
+						year > 2030 ||
+						month < 1 ||
+						month > 12 ||
+						day < 1 ||
+						day > 31
+					) {
+						dataQualityStats.invalidDateRows++
+						errorCount++
+						continue
+					}
+
+					row.year = year
 					row.salesValue = sales
 
 					csvData.push(row)
+					dataQualityStats.validRows++
+				}
+
+				// Показываем отчет о качестве данных для второго набора
+				showDataQualityReport()
+
+				// Показываем уведомления о проблемах в данных
+				if (errorCount > 0) {
+					showToast(
+						`Обнаружено ${errorCount} ошибок в данных. Некорректные строки пропущены.`,
+						'warning',
+						7000
+					)
+				}
+
+				if (warningCount > 0) {
+					showToast(
+						`Обнаружено ${warningCount} предупреждений в данных. Проверьте корректность значений.`,
+						'info',
+						5000
+					)
 				}
 
 				if (csvData.length === 0) {
@@ -301,6 +639,54 @@
 				}
 
 				console.log(`Успешно загружено ${csvData.length} строк данных.`)
+
+				// Активируем интерфейс для анализа
+				extractYears()
+				populateYearSelect()
+				analyzeBtn.disabled = false
+
+				if (dataQualityStats.validRows === dataQualityStats.totalRows) {
+					showToast('Данные успешно загружены и проверены', 'success')
+				} else {
+					showToast(
+						'Данные загружены с предупреждениями. Некоторые строки были исключены.',
+						'warning'
+					)
+				}
+			}
+
+			// Функция для показа отчета о полях (первый набор данных)
+			function showFieldValidationReport(headers, missingColumns) {
+				fieldValidationList.innerHTML = ''
+
+				requiredFields.forEach(field => {
+					const listItem = document.createElement('li')
+					listItem.className = 'field-item'
+
+					if (headers.includes(field)) {
+						listItem.innerHTML = `<span class="field-valid">✓</span> Поле "${field}" найдено`
+					} else {
+						listItem.innerHTML = `<span class="field-invalid">✗</span> Обязательное поле "${field}" отсутствует`
+					}
+
+					fieldValidationList.appendChild(listItem)
+				})
+
+				fieldValidation.classList.remove('hidden')
+			}
+
+			// Функция для показа отчета о качестве данных (второй набор данных)
+			function showDataQualityReport() {
+				qualityStats.innerHTML = `
+                <div class="quality-stat">Всего строк в файле: ${dataQualityStats.totalRows}</div>
+                <div class="quality-stat">Строк с некорректными датами: ${dataQualityStats.invalidDateRows}</div>
+                <div class="quality-stat">Строк с пропущенными значениями: ${dataQualityStats.missingValueRows}</div>
+                <div class="quality-stat">Строк с выбросами в продажах: ${dataQualityStats.outlierRows}</div>
+            `
+
+				validRowsInfo.innerHTML = `<strong>Валидных строк после очистки: ${dataQualityStats.validRows}</strong>`
+
+				dataQuality.classList.remove('hidden')
 			}
 
 			// Функция для корректного парсинга строк CSV (учитывает кавычки)
@@ -336,6 +722,14 @@
 				})
 
 				availableYears = Array.from(yearsSet).sort((a, b) => a - b)
+
+				// Валидация набора данных только для одного года
+				if (availableYears.length === 1) {
+					showToast(
+						`В данных представлен только ${availableYears[0]} год.`,
+						'info'
+					)
+				}
 			}
 
 			// Заполнение выпадающего списка годов
@@ -356,103 +750,124 @@
 				const yearData = csvData.filter(row => row.year === parseInt(year))
 
 				if (yearData.length === 0) {
-					alert(`Нет данных за ${year} год.`)
+					showToast(`Нет данных за ${year} год.`, 'error')
 					return
 				}
 
-				// Группируем по штатам
-				const stateData = {}
+				// Группируем по городам и штатам
+				const cityData = {}
 				yearData.forEach(row => {
-					if (!stateData[row.state]) {
-						stateData[row.state] = {
-							orders: 0,
+					const key = row.city + '|' + row.state
+					if (!cityData[key]) {
+						cityData[key] = {
+							city: row.city,
+							state: row.state,
 							revenue: 0,
 						}
 					}
-					stateData[row.state].orders += 1
-					stateData[row.state].revenue += row.salesValue
+					cityData[key].revenue += row.salesValue
 				})
 
 				// Преобразуем в массив и сортируем по выручке
-				const stateArray = Object.keys(stateData).map(state => ({
-					state,
-					orders: stateData[state].orders,
-					revenue: stateData[state].revenue,
+				const cityArray = Object.keys(cityData).map(key => ({
+					city: cityData[key].city,
+					state: cityData[key].state,
+					revenue: cityData[key].revenue,
 				}))
 
-				stateArray.sort((a, b) => b.revenue - a.revenue)
+				cityArray.sort((a, b) => b.revenue - a.revenue)
 
 				// Берем топ-10
-				const top10 = stateArray.slice(0, 10)
+				const top10 = cityArray.slice(0, 10)
 
 				// Вычисляем общую выручку за год
-				const totalRevenue = yearData.reduce(
+				const totalRevenueYear = yearData.reduce(
 					(sum, row) => sum + row.salesValue,
 					0
 				)
 
-				// Вычисляем выручку топ-10 штатов
-				const top10Revenue = top10.reduce(
-					(sum, state) => sum + state.revenue,
+				// Вычисляем общую выручку за все года
+				const totalRevenueAll = csvData.reduce(
+					(sum, row) => sum + row.salesValue,
 					0
 				)
 
-				// Вычисляем долю топ-10
-				const top10Percentage = ((top10Revenue / totalRevenue) * 100).toFixed(2)
+				// Вычисляем долю топ-10 городов и процент выручки за год
+				const yearPercentage = (
+					(totalRevenueYear / totalRevenueAll) *
+					100
+				).toFixed(2)
+
+				// Для каждого города вычисляем долю в процентах от общей выручки за год
+				top10.forEach(city => {
+					city.percentage = ((city.revenue / totalRevenueYear) * 100).toFixed(2)
+				})
 
 				// Отображаем результаты
-				displayResults(year, top10, totalRevenue, top10Revenue, top10Percentage)
+				displayResults(
+					year,
+					top10,
+					totalRevenueYear,
+					totalRevenueAll,
+					yearPercentage
+				)
 
 				// Строим диаграмму
 				buildChart(top10, year)
+
+				showToast(`Анализ данных за ${year} год завершен`, 'success')
 			}
 
 			// Отображение результатов в таблице
 			function displayResults(
 				year,
 				top10,
-				totalRevenue,
-				top10Revenue,
-				top10Percentage
+				totalRevenueYear,
+				totalRevenueAll,
+				yearPercentage
 			) {
 				// Обновляем заголовок
-				tableTitle.textContent = `Выручка по штатам за ${year} год (топ 10)`
+				tableTitle.textContent = `Выручка по городам за ${year} год (топ 10)`
 
 				// Очищаем таблицу
 				tableBody.innerHTML = ''
 
 				// Заполняем таблицу
-				top10.forEach((state, index) => {
+				top10.forEach((city, index) => {
 					const row = document.createElement('tr')
 
 					const numberCell = document.createElement('td')
 					numberCell.textContent = index + 1
 
-					const stateCell = document.createElement('td')
-					stateCell.textContent = state.state
+					const cityCell = document.createElement('td')
+					cityCell.textContent = city.city
 
-					const ordersCell = document.createElement('td')
-					ordersCell.textContent = state.orders
+					const stateCell = document.createElement('td')
+					stateCell.textContent = city.state
 
 					const revenueCell = document.createElement('td')
-					revenueCell.textContent = formatCurrency(state.revenue)
+					revenueCell.textContent = formatCurrency(city.revenue)
+
+					const percentageCell = document.createElement('td')
+					percentageCell.textContent = city.percentage + '%'
 
 					row.appendChild(numberCell)
+					row.appendChild(cityCell)
 					row.appendChild(stateCell)
-					row.appendChild(ordersCell)
 					row.appendChild(revenueCell)
+					row.appendChild(percentageCell)
 
 					tableBody.appendChild(row)
 				})
 
 				// Обновляем статистику
 				totalRevenueEl.textContent = `Общая выручка за ${year} год: ${formatCurrency(
-					totalRevenue
+					totalRevenueYear
 				)}`
-				top10RevenueEl.textContent = `Выручка топ 10 штатов: ${formatCurrency(
-					top10Revenue
+				allYearsRevenueEl.textContent = `Общая выручка за все года: ${formatCurrency(
+					totalRevenueAll
 				)}`
-				top10PercentageEl.textContent = `Доля топ 10 штатов: ${top10Percentage}%`
+				yearPercentageEl.textContent = `Процент выручки за ${year} год от общей: ${yearPercentage}%`
 
 				// Показываем результаты
 				resultsDiv.classList.remove('hidden')
@@ -473,8 +888,8 @@
 				}
 
 				// Подготавливаем данные для диаграммы
-				const labels = top10.map(state => state.state)
-				const data = top10.map(state => state.revenue)
+				const labels = top10.map(city => `${city.city}, ${city.state}`)
+				const data = top10.map(city => city.revenue)
 
 				// Создаем диаграмму
 				revenueChart = new Chart(ctx, {
@@ -483,7 +898,7 @@
 						labels: labels,
 						datasets: [
 							{
-								label: `Выручка по штатам за ${year} год ($)`,
+								label: `Выручка по городам за ${year} год ($)`,
 								data: data,
 								backgroundColor: [
 									'rgba(255, 99, 132, 0.7)',
@@ -527,7 +942,7 @@
 							x: {
 								title: {
 									display: true,
-									text: 'Штаты',
+									text: 'Города',
 								},
 							},
 						},
@@ -561,6 +976,14 @@
 				yearSelect.disabled = true
 				analyzeBtn.disabled = true
 				resultsDiv.classList.add('hidden')
+				fieldValidation.classList.add('hidden')
+				dataQuality.classList.add('hidden')
+
+				// Удаляем только toast с информацией о полях при сбросе
+				const fieldsToasts =
+					toastContainer.querySelectorAll('.toast.fields-info')
+				fieldsToasts.forEach(toast => toast.remove())
+
 				if (revenueChart) {
 					revenueChart.destroy()
 					revenueChart = null
