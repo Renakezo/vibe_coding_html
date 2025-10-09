@@ -116,20 +116,18 @@
 				bottom: 20px;
 				right: 20px;
 				z-index: 1000;
-				max-width: 400px;
+				max-width: 500px;
 			}
 
 			.toast {
 				background-color: #323232;
 				color: white;
-				padding: 16px 24px;
+				padding: 16px;
 				margin-top: 10px;
-				border-radius: 4px;
-				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-				display: flex;
-				justify-content: space-between;
-				align-items: center;
+				border-radius: 8px;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 				animation: slideIn 0.3s ease-out;
+				max-width: 500px;
 			}
 
 			.toast.error {
@@ -148,9 +146,8 @@
 				background-color: #1976d2;
 			}
 
-			.toast.fields-info {
+			.toast.fields {
 				background-color: #7b1fa2;
-				max-width: 500px;
 			}
 
 			.toast-close {
@@ -160,33 +157,47 @@
 				font-size: 18px;
 				cursor: pointer;
 				margin-left: 10px;
+				float: right;
 			}
 
-			.toast-fields-content {
+			.toast-content {
 				flex: 1;
 			}
 
-			.toast-fields-title {
+			.toast-title {
 				font-weight: bold;
 				margin-bottom: 8px;
 				font-size: 16px;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
 			}
 
-			.fields-present,
-			.fields-missing {
+			.fields-list {
+				margin: 8px 0;
+			}
+
+			.field-item {
+				padding: 6px 8px;
 				margin: 4px 0;
-				padding: 4px 8px;
-				border-radius: 3px;
+				border-radius: 4px;
+				display: flex;
+				align-items: center;
 			}
 
-			.fields-present {
+			.field-valid {
 				background-color: rgba(76, 175, 80, 0.2);
 				border-left: 3px solid #4caf50;
 			}
 
-			.fields-missing {
+			.field-invalid {
 				background-color: rgba(244, 67, 54, 0.2);
 				border-left: 3px solid #f44336;
+			}
+
+			.field-icon {
+				margin-right: 8px;
+				font-weight: bold;
 			}
 
 			@keyframes slideIn {
@@ -239,24 +250,6 @@
 				list-style-type: none;
 				padding: 0;
 			}
-
-			.field-item {
-				padding: 5px 0;
-				display: flex;
-				align-items: center;
-			}
-
-			.field-valid {
-				color: #4caf50;
-				margin-right: 8px;
-				font-weight: bold;
-			}
-
-			.field-invalid {
-				color: #f44336;
-				margin-right: 8px;
-				font-weight: bold;
-			}
 		</style>
 	</head>
 	<body>
@@ -267,12 +260,6 @@
 				<label for="csvFile">Выберите CSV файл:</label>
 				<input type="file" id="csvFile" accept=".csv" />
 				<span id="fileError" class="error hidden"></span>
-			</div>
-
-			<!-- Блок информации о полях (для первого набора данных) -->
-			<div id="fieldValidation" class="field-validation hidden">
-				<h3>Информация о полях файла:</h3>
-				<ul id="fieldValidationList" class="field-list"></ul>
 			</div>
 
 			<!-- Блок качества данных (для второго набора данных) -->
@@ -332,8 +319,6 @@
 			const allYearsRevenueEl = document.getElementById('allYearsRevenue')
 			const yearPercentageEl = document.getElementById('yearPercentage')
 			const fileError = document.getElementById('fileError')
-			const fieldValidation = document.getElementById('fieldValidation')
-			const fieldValidationList = document.getElementById('fieldValidationList')
 			const dataQuality = document.getElementById('dataQuality')
 			const qualityStats = document.getElementById('qualityStats')
 			const validRowsInfo = document.getElementById('validRowsInfo')
@@ -367,27 +352,25 @@
 				const toast = document.createElement('div')
 				toast.className = `toast ${type}`
 
-				if (type === 'fields-info') {
-					toast.innerHTML = `
-                    <div class="toast-fields-content">${message}</div>
-                `
-				} else {
-					toast.innerHTML = `
-                    <span>${message}</span>
-                    <button class="toast-close">&times;</button>
-                `
-
-					// Обработчик закрытия toast только для обычных уведомлений
-					const closeBtn = toast.querySelector('.toast-close')
-					closeBtn.addEventListener('click', () => {
-						toast.remove()
-					})
-				}
+				toast.innerHTML = `
+                <div class="toast-content">
+                    <div class="toast-title">
+                        <span>${message}</span>
+                        <button class="toast-close">&times;</button>
+                    </div>
+                </div>
+            `
 
 				toastContainer.appendChild(toast)
 
-				// Автоматическое закрытие только для обычных уведомлений
-				if (duration > 0 && type !== 'fields-info') {
+				// Обработчик закрытия toast
+				const closeBtn = toast.querySelector('.toast-close')
+				closeBtn.addEventListener('click', () => {
+					toast.remove()
+				})
+
+				// Автоматическое закрытие
+				if (duration > 0) {
 					setTimeout(() => {
 						if (toast.parentNode) {
 							toast.remove()
@@ -400,29 +383,51 @@
 
 			// Функция для показа информации о полях в формате toast
 			function showFieldsToast(headers, missingColumns) {
-				// Удаляем предыдущие toast с информацией о полях
-				const existingFieldsToasts =
-					toastContainer.querySelectorAll('.toast.fields-info')
-				existingFieldsToasts.forEach(toast => toast.remove())
-
 				const presentFields = requiredFields.filter(field =>
 					headers.includes(field)
 				)
 
-				const message = `
-                <div class="toast-fields-title">Информация о полях файла:</div>
-                <div class="fields-present">
-                    <strong>✓ Найдены поля:</strong> ${presentFields.join(', ')}
-                </div>
-                <div class="fields-missing">
-                    <strong>✗ Отсутствуют поля:</strong> ${missingColumns.join(
-											', '
-										)}
+				const toast = document.createElement('div')
+				toast.className = 'toast fields'
+
+				let fieldsHTML = ''
+				requiredFields.forEach(field => {
+					const isValid = headers.includes(field)
+					fieldsHTML += `
+                    <div class="field-item ${
+											isValid ? 'field-valid' : 'field-invalid'
+										}">
+                        <span class="field-icon">${isValid ? '✓' : '✗'}</span>
+                        <span>${field} ${isValid ? '' : '(отсутствует)'}</span>
+                    </div>
+                `
+				})
+
+				toast.innerHTML = `
+                <div class="toast-content">
+                    <div class="toast-title">
+                        <span>Информация о полях файла</span>
+                        <button class="toast-close">&times;</button>
+                    </div>
+                    <div class="fields-list">
+                        ${fieldsHTML}
+                    </div>
+                    <div style="margin-top: 8px; font-size: 14px; opacity: 0.9;">
+                        Найдено: ${presentFields.length} из ${requiredFields.length} обязательных полей
+                    </div>
                 </div>
             `
 
-				// Создаем non-closable toast
-				showToast(message, 'fields-info', 0)
+				toastContainer.appendChild(toast)
+
+				// Обработчик закрытия toast
+				const closeBtn = toast.querySelector('.toast-close')
+				closeBtn.addEventListener('click', () => {
+					toast.remove()
+				})
+
+				// Этот toast не закрывается автоматически
+				return toast
 			}
 
 			// Обработчик загрузки файла
@@ -444,7 +449,6 @@
 				}
 
 				fileError.classList.add('hidden')
-				fieldValidation.classList.add('hidden')
 				dataQuality.classList.add('hidden')
 
 				// Чтение файла
@@ -455,7 +459,6 @@
 						parseCSV(text)
 					} catch (error) {
 						showError('Ошибка при чтении файла: ' + error.message)
-						// Всегда показываем toast с ошибкой
 						showToast('Ошибка при чтении файла: ' + error.message, 'error')
 						resetUI()
 					}
@@ -510,7 +513,6 @@
 
 				// Для первого набора данных - проверяем поля и показываем отчет
 				if (missingColumns.length > 0) {
-					showFieldValidationReport(headers, missingColumns)
 					showFieldsToast(headers, missingColumns)
 					throw new Error('CSV файл не содержит всех обязательных полей')
 				}
@@ -653,26 +655,6 @@
 						'warning'
 					)
 				}
-			}
-
-			// Функция для показа отчета о полях (первый набор данных)
-			function showFieldValidationReport(headers, missingColumns) {
-				fieldValidationList.innerHTML = ''
-
-				requiredFields.forEach(field => {
-					const listItem = document.createElement('li')
-					listItem.className = 'field-item'
-
-					if (headers.includes(field)) {
-						listItem.innerHTML = `<span class="field-valid">✓</span> Поле "${field}" найдено`
-					} else {
-						listItem.innerHTML = `<span class="field-invalid">✗</span> Обязательное поле "${field}" отсутствует`
-					}
-
-					fieldValidationList.appendChild(listItem)
-				})
-
-				fieldValidation.classList.remove('hidden')
 			}
 
 			// Функция для показа отчета о качестве данных (второй набор данных)
@@ -976,13 +958,7 @@
 				yearSelect.disabled = true
 				analyzeBtn.disabled = true
 				resultsDiv.classList.add('hidden')
-				fieldValidation.classList.add('hidden')
 				dataQuality.classList.add('hidden')
-
-				// Удаляем только toast с информацией о полях при сбросе
-				const fieldsToasts =
-					toastContainer.querySelectorAll('.toast.fields-info')
-				fieldsToasts.forEach(toast => toast.remove())
 
 				if (revenueChart) {
 					revenueChart.destroy()
